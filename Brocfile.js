@@ -1,15 +1,18 @@
 // var filterCoffeeScript = require('broccoli-coffee')
 // var filterTemplates = require('broccoli-template')
 var uglifyJavaScript = require('broccoli-uglify-js')
-var compileES6 = require('broccoli-es6-concatenator')
+var concat = require('broccoli-concat')
+// var esTranspiler = require('broccoli-babel-transpiler');
 var compileSass = require('broccoli-sass')
 var pickFiles = require('broccoli-static-compiler')
 var mergeTrees = require('broccoli-merge-trees')
-var findBowerTrees = require('broccoli-bower')
+// var findBowerTrees = require('broccoli-bower')
 var env = require('broccoli-env').getEnv()
 var assetRev = require('broccoli-asset-rev');
-
-console.log('Starting...');
+var instrument = require('broccoli-debug').instrument;
+// var browserify = require('broccoli-browserify');
+var fastBrowserify = require('broccoli-fast-browserify');
+var es6ify = require('es6ify');
 
 // function preprocess (tree) {
 //   // filter .hbs and .handlebar files, use the Ember handlebar compiler
@@ -60,31 +63,35 @@ console.log('Starting...');
 // Add bower dependencies
 // findBowerTrees uses heuristics to pick the lib directory and/or main files,
 // and returns an array of trees for each bower package found.
+// browserPolyfillFiles = pickFiles('node_modules/babel-es6-polyfill', {
+//   srcDir: '/',
+//   files: ["*.js"],
+//   destDir: '/assets'
+// });
+
+// browserPolyfillFiles = browserify(browserPolyfillFiles);
+
 var jsFiles = pickFiles('assets/javascripts', {
   srcDir: '/',
   files: ["*.js"],
   destDir: '/assets'
-})
-// sourceTrees = jsFiles.concat(findBowerTrees())
+});
 
-// merge array into tree
-// var appAndDependencies = new mergeTrees(sourceTrees, { overwrite: true })
 
-// Transpile ES6 modules and concatenate them,
-// recursively including modules referenced by import statements.
-// var appJs = compileES6(appAndDependencies, {
-//   // Prepend contents of vendor/loader.js
-//   // loaderFile: 'loader.js',
-//   inputFiles: [
-//     '*.js'
-//   ],
-//   legacyFilesToAppend: [
-//     'jquery.js'
-//   ],
-//   wrapInEval: env !== 'production',
-//   outputFile: '/assets/app.min.js'
-// })
-// console.log(appCss);
+
+jsFiles = instrument.print(jsFiles);
+
+// jsFiles = concat(jsFiles, {
+//   inputFiles: ["**/*.js"],
+//   outputFile: '/assets/app.js'
+// });
+
+bowerFiles = pickFiles('bower_components/jquery/dist', {
+  srcDir: '/',
+  files: ["*"],
+  destDir: '/assets/vendor'
+});
+
 // if (env === 'production') {
 //   // minify js
 //   appJs = uglifyJavaScript(appJs, {
@@ -93,9 +100,32 @@ var jsFiles = pickFiles('assets/javascripts', {
 //   })
 // }
 
+// var jsFiles = new esTranspiler(jsFiles, {
+
+// });
+
+// jsFiles = instrument.print(jsFiles);
+
+
+// jsFiles = browserify(jsFiles, {
+//   outputFile: '/assets/main.js',
+//   entries: ['./assets/main.js']
+// });
+
+var jsFiles = fastBrowserify(jsFiles, {
+  bundles: {
+    "assets/app.js": {
+      transform: es6ify,
+      entryPoints: [es6ify.runtime, 'assets/app.js']
+    }
+  }
+});
+
+
+jsFiles = instrument.print(jsFiles);
 
 // compile sass
-var appCss = compileSass(['assets/stylesheets'], 'app.scss', 'assets/app.css')
+var appCss = compileSass(['assets/stylesheets'], 'app.scss', 'assets/app.css');
 
 // create tree for public folder (no filters needed here)
 var imageFiles = pickFiles('assets/images', {
@@ -109,16 +139,19 @@ var publicFiles = pickFiles('public', {
   destDir: '.'
 });
 
-var tree = mergeTrees( [jsFiles, appCss, imageFiles, publicFiles], { overwrite: true })
+var tree = mergeTrees( [ bowerFiles, jsFiles, appCss, imageFiles, publicFiles], { overwrite: true })
 // var tree = [jsFiles, appCss, imageFiles, publicFiles]
 
-tree = assetRev(tree, {
-  extensions: ['js', 'css', 'png', 'jpg', 'gif'],
-  // exclude: ['fonts/169929'],
-  replaceExtensions: ['html', 'js', 'css'],
-  // prepend: 'https://subdomain.cloudfront.net/'
-  generateRailsManifest: true
-});
+// tree = assetRev(tree, {
+//   extensions: ['js', 'css', 'png', 'jpg', 'gif'],
+//   // exclude: ['fonts/169929'],
+//   replaceExtensions: ['html', 'js', 'css'],
+//   // prepend: 'https://subdomain.cloudfront.net/'
+//   generateRailsManifest: true
+// });
+
+tree = instrument.print(tree);
+
 
 // merge js, css and public file trees, and export the
 // module.exports = mergeTrees( [tree['inputTree']], { overwrite: true })
